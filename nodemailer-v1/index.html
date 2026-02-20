@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NodeMailer Pro</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#060b18;font-family:system-ui,-apple-system,sans-serif}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:#1e2d4a;border-radius:3px}
+  </style>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<base target="_blank">
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    /* ─── Spintax helper ─────────────────── */
+    function spintax(t) {
+      return t.replace(/\{([^\{}]+)\}/g, (_, c) => {
+        const o = c.split('|');
+        return o[Math.floor(Math.random() * o.length)];
+      });
+    }
+
+    /* ─── Styles ─────────────────────────── */
+    const S = {
+      page: { minHeight:'100vh', background:'linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%)', color:'#e2e8f0', fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif' },
+      loginWrap: { display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'20px' },
+      loginBox: { background:'rgba(30,41,59,0.95)', borderRadius:'16px', padding:'40px', width:'100%', maxWidth:'400px', border:'1px solid rgba(99,102,241,0.3)', boxShadow:'0 25px 50px rgba(0,0,0,0.5)' },
+      loginTitle: { textAlign:'center', fontSize:'28px', fontWeight:700, marginBottom:'8px', background:'linear-gradient(135deg,#818cf8,#c084fc)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' },
+      loginSub: { textAlign:'center', color:'#94a3b8', marginBottom:'24px', fontSize:'14px' },
+      label: { display:'block', fontSize:'12px', fontWeight:600, color:'#94a3b8', marginBottom:'6px', textTransform:'uppercase', letterSpacing:'0.5px' },
+      input: { width:'100%', padding:'12px 16px', background:'#0f172a', border:'1px solid #334155', borderRadius:'8px', color:'#e2e8f0', fontSize:'14px', outline:'none', boxSizing:'border-box', marginBottom:'16px' },
+      btnPrimary: { width:'100%', padding:'14px', background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff', border:'none', borderRadius:'10px', fontSize:'16px', fontWeight:600, cursor:'pointer', letterSpacing:'0.5px' },
+      sidebar: { width:'240px', background:'rgba(15,23,42,0.95)', borderRight:'1px solid #1e293b', padding:'20px 0', display:'flex', flexDirection:'column', flexShrink:0, height:'100vh', position:'sticky', top:0 },
+      logo: { padding:'0 20px 20px', borderBottom:'1px solid #1e293b', marginBottom:'8px' },
+      navBtn: (a) => ({ display:'flex', alignItems:'center', gap:'10px', width:'100%', padding:'12px 20px', background: a ? 'linear-gradient(90deg,rgba(99,102,241,0.2),transparent)' : 'transparent', color: a ? '#818cf8' : '#94a3b8', border:'none', borderLeft: a ? '3px solid #818cf8' : '3px solid transparent', cursor:'pointer', fontSize:'14px', fontWeight: a ? 600 : 400, textAlign:'left' }),
+      main: { flex:1, padding:'24px', overflowY:'auto', height:'100vh' },
+      card: { background:'rgba(30,41,59,0.7)', borderRadius:'12px', border:'1px solid #334155', padding:'20px', marginBottom:'16px' },
+      cardTitle: { fontSize:'16px', fontWeight:600, marginBottom:'16px', display:'flex', alignItems:'center', gap:'8px' },
+      textarea: { width:'100%', minHeight:'120px', padding:'12px', background:'#0f172a', border:'1px solid #334155', borderRadius:'8px', color:'#e2e8f0', fontFamily:'monospace', fontSize:'13px', resize:'vertical', outline:'none', boxSizing:'border-box' },
+      grid: (cols) => ({ display:'grid', gridTemplateColumns:`repeat(${cols},1fr)`, gap:'12px' }),
+      stat: (bg) => ({ background:`linear-gradient(135deg,${bg})`, borderRadius:'12px', padding:'16px', textAlign:'center' }),
+      statVal: { fontSize:'28px', fontWeight:700, color:'#fff' },
+      statLbl: { fontSize:'11px', color:'rgba(255,255,255,0.7)', marginTop:'4px', textTransform:'uppercase' },
+      portBtn: (a) => ({ padding:'12px 20px', borderRadius:'10px', border: a ? '2px solid #818cf8' : '2px solid #334155', background: a ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#0f172a', color:'#fff', cursor:'pointer', fontWeight:600, fontSize:'14px', textAlign:'center', flex:1 }),
+      logBox: { background:'#0f172a', borderRadius:'8px', padding:'12px', maxHeight:'300px', overflowY:'auto', fontFamily:'monospace', fontSize:'12px', border:'1px solid #1e293b' },
+      tag: (c) => ({ display:'inline-block', padding:'4px 10px', borderRadius:'20px', fontSize:'11px', background:c, color:'#fff', margin:'2px' }),
+      progressBar: { width:'100%', height:'12px', background:'#1e293b', borderRadius:'6px', overflow:'hidden' },
+      progressFill: (pct) => ({ width:`${pct}%`, height:'100%', background:'linear-gradient(90deg,#6366f1,#8b5cf6,#c084fc)', borderRadius:'6px', transition:'width 0.3s' }),
+      badge: (c) => ({ padding:'2px 8px', borderRadius:'4px', fontSize:'11px', fontWeight:600, background:c, color:'#fff' }),
+      flexRow: { display:'flex', gap:'12px', alignItems:'center', flexWrap:'wrap' },
+      modal: { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'20px' },
+      modalBox: { background:'#1e293b', borderRadius:'16px', padding:'24px', width:'100%', maxWidth:'600px', maxHeight:'80vh', overflowY:'auto', border:'1px solid #334155' },
+    };
+
+    function App() {
+      /* ─── Auth ──────────────────────────── */
+      const [loggedIn, setLoggedIn] = useState(() => sessionStorage.getItem('auth') === 'true');
+      const [loginUser, setLoginUser] = useState('');
+      const [loginPass, setLoginPass] = useState('');
+      const [loginErr, setLoginErr] = useState('');
+      const [loginLoading, setLoginLoading] = useState(false);
+
+      /* ─── Navigation ────────────────────── */
+      const [tab, setTab] = useState('dashboard');
+
+      /* ─── SMTP & Proxy ──────────────────── */
+      const [smtpText, setSmtpText] = useState('');
+      const [smtps, setSmtps] = useState([]);
+      const [proxyText, setProxyText] = useState('');
+      const [proxies, setProxies] = useState([]);
+      const [smtpPort, setSmtpPort] = useState('587');
+      const [useProxies, setUseProxies] = useState(false);
+
+      /* ─── Compose ───────────────────────── */
+      const [fromName, setFromName] = useState('');
+      const [fromEmail, setFromEmail] = useState('');
+      const [replyTo, setReplyTo] = useState('');
+      const [recipientText, setRecipientText] = useState('');
+      const [recipients, setRecipients] = useState([]);
+      const [subject, setSubject] = useState('');
+      const [htmlBody, setHtmlBody] = useState('<h1>Hello!</h1><p>This is a test email.</p>');
+      const [showPreview, setShowPreview] = useState(false);
+
+      /* ─── Settings ──────────────────────── */
+      const [minDelay, setMinDelay] = useState(1000);
+      const [maxDelay, setMaxDelay] = useState(3000);
+      const [emailsPerRotation, setEmailsPerRotation] = useState(10);
+      const [totalMails, setTotalMails] = useState(0);
+
+      /* ─── Templates ── */
+      const [templates, setTemplates] = useState([]);
+      const [showSaveModal, setShowSaveModal] = useState(false);
+      const [showLoadModal, setShowLoadModal] = useState(false);
+      const [templateName, setTemplateName] = useState('');
+
+      /* ─── Sending State ─────────────────── */
+      const [sending, setSending] = useState(false);
+      const [paused, setPaused] = useState(false);
+      const [progress, setProgress] = useState({ sent: 0, failed: 0, total: 0, pct: 0, currentSmtp: '', currentRecipient: '', currentProxy: '', currentPort: '' });
+      const [logs, setLogs] = useState([]);
+      const [tracking, setTracking] = useState({ opens: 0, clicks: 0 });
+
+      /* ─── Socket ref ────────────────────── */
+      const socketRef = useRef(null);
+      const logBoxRef = useRef(null);
+
+      /* ─── Load templates from server on login ── */
+      useEffect(() => {
+        if (!loggedIn) return;
+        fetch('/api/templates').then(r => r.json()).then(data => {
+          if (Array.isArray(data) && data.length > 0) setTemplates(data);
+        }).catch(() => {});
+        fetch('/api/tracking').then(r => r.json()).then(data => {
+          if (data) setTracking(data);
+        }).catch(() => {});
+      }, [loggedIn]);
+
+      /* ─── FIXED: Socket.io connection with better configuration ──────────── */
+      useEffect(() => {
+        if (!loggedIn) return;
+
+        // FIXED: Better Socket.io configuration
+        const socketOptions = {
+          transports: ['websocket', 'polling'],  // Try WebSocket first, fallback to polling
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          randomizationFactor: 0.5,
+          timeout: 20000,  // Increased timeout
+          forceNew: true,
+          autoConnect: true,
+          // Path for Socket.io endpoint
+          path: '/socket.io/',
+          // Extra headers for CORS
+          extraHeaders: {
+            'Access-Control-Allow-Origin': '*'
+          }
+        };
+
+        // Connect to current origin
+        const s = io(window.location.origin, socketOptions);
+        socketRef.current = s;
+
+        s.on('connect', () => {
+          console.log('✅ Socket connected:', s.id);
+          addLog('info', '🔌 Connected to server (transport: ' + s.io.engine.transport.name + ')');
+        });
+
+        s.on('connect_error', (err) => {
+          console.error('❌ Connection error:', err.message);
+          addLog('error', `Connection error: ${err.message}`);
+
+          // If WebSocket fails, force polling
+          if (s.io.engine && s.io.engine.transport && s.io.engine.transport.name === 'websocket') {
+            console.log('⚠️ WebSocket failed, switching to polling...');
+            s.io.opts.transports = ['polling'];
+          }
+        });
+
+        s.on('reconnect', (attempt) => {
+          console.log('🔄 Reconnected after', attempt, 'attempts');
+          addLog('info', `🔄 Reconnected to server (attempt ${attempt})`);
+        });
+
+        s.on('reconnect_attempt', (attempt) => {
+          console.log('🔄 Reconnection attempt', attempt);
+        });
+
+        s.on('reconnect_error', (err) => {
+          console.error('❌ Reconnection error:', err.message);
+        });
+
+        s.on('reconnect_failed', () => {
+          console.error('❌ Reconnection failed');
+          addLog('error', '❌ Failed to reconnect to server. Please refresh.');
+        });
+
+        s.on('send-log', (data) => {
+          addLog(data.type, data.msg);
+        });
+
+        s.on('send-progress', (data) => {
+          setProgress(data);
+        });
+
+        s.on('send-error', (msg) => {
+          addLog('error', `🚫 ${msg}`);
+          setSending(false);
+        });
+
+        s.on('send-complete', (data) => {
+          addLog('info', `🏁 Done! Sent: ${data.sent} | Failed: ${data.failed} | Opens: ${data.opens} | Clicks: ${data.clicks}`);
+          setSending(false);
+          setPaused(false);
+          setTracking({ opens: data.opens, clicks: data.clicks });
+        });
+
+        s.on('disconnect', (reason) => {
+          console.log('❌ Disconnected:', reason);
+          addLog('warn', `⚠️ Disconnected: ${reason}`);
+        });
+
+        s.on('error', (err) => {
+          console.error('⚠️ Socket error:', err);
+          addLog('error', `Socket error: ${err.message}`);
+        });
+
+        return () => { 
+          s.disconnect(); 
+        };
+      }, [loggedIn]);
+
+      /* ─── Auto-scroll log ──────────────── */
+      useEffect(() => {
+        if (logBoxRef.current) logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
+      }, [logs]);
+
+      /* ─── Helpers ───────────────────────── */
+      const addLog = useCallback((type, msg) => {
+        const ts = new Date().toLocaleTimeString();
+        setLogs(prev => [...prev.slice(-200), { type, msg, ts }]);
+      }, []);
+
+      const parseSmtps = (text) => {
+        const list = [];
+        text.split('\n').forEach(line => {
+          const t = line.trim();
+          if (!t) return;
+          const p = t.split('|');
+          if (p.length >= 4) list.push({ host: p[0].trim(), port: p[1].trim(), user: p[2].trim(), pass: p[3].trim() });
+        });
+        setSmtps(list);
+      };
+
+      const parseRecipients = (text) => {
+        const list = text.split('\n').map(l => l.trim()).filter(l => l && l.includes('@'));
+        setRecipients(list);
+      };
+
+      /* ─── Login ─────────────────────────── */
+      const doLogin = async () => {
+        setLoginErr('');
+        setLoginLoading(true);
+        try {
+          const r = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: loginUser, password: loginPass })
+          });
+          const d = await r.json();
+          if (d.success) {
+            sessionStorage.setItem('auth', 'true');
+            setLoggedIn(true);
+          } else {
+            setLoginErr(d.error || 'Invalid credentials');
+          }
+        } catch {
+          setLoginErr('Server not reachable. Make sure the Node.js server is running.');
+        }
+        setLoginLoading(false);
+      };
+
+      const doLogout = () => {
+        sessionStorage.removeItem('auth');
+        setLoggedIn(false);
+        if (socketRef.current) socketRef.current.disconnect();
+      };
+
+      /* ─── Templates ─────────────────────── */
+      const saveTemplate = async () => {
+        if (!templateName.trim()) return;
+        const tmpl = { id: Date.now().toString(), name: templateName, subject, html: htmlBody, savedAt: new Date().toISOString() };
+        const updated = [...templates, tmpl];
+        setTemplates(updated);
+        setShowSaveModal(false);
+        setTemplateName('');
+        try { await fetch('/api/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }); } catch {}
+        addLog('info', `💾 Template "${tmpl.name}" saved`);
+      };
+
+      const loadTemplate = (t) => {
+        setSubject(t.subject);
+        setHtmlBody(t.html);
+        setShowLoadModal(false);
+        addLog('info', `📂 Template "${t.name}" loaded`);
+      };
+
+      const deleteTemplate = async (id) => {
+        const updated = templates.filter(t => t.id !== id);
+        setTemplates(updated);
+        try { await fetch(`/api/templates/${id}`, { method: 'DELETE' }); } catch {}
+      };
+
+      /* ─── File Upload ───────────────────── */
+      const handleFileUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const text = ev.target?.result;
+          setRecipientText(text);
+          parseRecipients(text);
+        };
+        reader.readAsText(file);
+      };
+
+      /* ─── Sending Controls ─────────────── */
+      const startSending = () => {
+        const s = socketRef.current;
+        if (!s || !s.connected) { 
+          addLog('error', '🚫 Not connected to server. Refresh the page.'); 
+          return; 
+        }
+        if (smtps.length === 0) { addLog('error', '🚫 Add SMTP servers first'); return; }
+        if (recipients.length === 0) { addLog('error', '🚫 Add recipients first'); return; }
+        if (!subject.trim()) { addLog('error', '🚫 Enter a subject line'); return; }
+        if (!htmlBody.trim()) { addLog('error', '🚫 Enter email body'); return; }
+
+        setSending(true);
+        setPaused(false);
+        setLogs([]);
+        setProgress({ sent: 0, failed: 0, total: 0, pct: 0, currentSmtp: '', currentRecipient: '', currentProxy: '', currentPort: '' });
+
+        s.emit('start-sending', {
+          smtps, proxies, recipients, fromName, fromEmail, replyTo,
+          subject, htmlBody, minDelay, maxDelay, emailsPerRotation,
+          totalMailsToSend: totalMails, useProxies, smtpPort
+        });
+      };
+
+      const pauseSending = () => { 
+        if (socketRef.current) socketRef.current.emit('pause-sending'); 
+        setPaused(true); 
+      };
+      const resumeSending = () => { 
+        if (socketRef.current) socketRef.current.emit('resume-sending'); 
+        setPaused(false); 
+      };
+      const stopSending = () => { 
+        if (socketRef.current) socketRef.current.emit('stop-sending'); 
+        setSending(false); 
+        setPaused(false); 
+      };
+
+      /* ─── Render: Login Screen ──────────── */
+      if (!loggedIn) {
+        return React.createElement('div', { style: S.page },
+          React.createElement('div', { style: S.loginWrap },
+            React.createElement('div', { style: S.loginBox },
+              React.createElement('div', { style: { textAlign: 'center', fontSize: '48px', marginBottom: '12px' } }, '📧'),
+              React.createElement('h1', { style: S.loginTitle }, 'NodeMailer Pro'),
+              React.createElement('p', { style: S.loginSub }, 'Bulk Email System — Admin Login'),
+              loginErr && React.createElement('div', { style: { background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', borderRadius: '8px', padding: '10px', marginBottom: '16px', color: '#fca5a5', fontSize: '13px', textAlign: 'center' } }, loginErr),
+              React.createElement('label', { style: S.label }, 'Username'),
+              React.createElement('input', { style: S.input, value: loginUser, onChange: e => setLoginUser(e.target.value), placeholder: 'Enter username', onKeyDown: e => e.key === 'Enter' && doLogin() }),
+              React.createElement('label', { style: S.label }, 'Password'),
+              React.createElement('input', { style: S.input, type: 'password', value: loginPass, onChange: e => setLoginPass(e.target.value), placeholder: 'Enter password', onKeyDown: e => e.key === 'Enter' && doLogin() }),
+              React.createElement('button', { style: { ...S.btnPrimary, opacity: loginLoading ? 0.7 : 1 }, onClick: doLogin, disabled: loginLoading },
+                loginLoading ? '⏳ Signing in...' : '🔐 Sign In'
+              ),
+              React.createElement('p', { style: { textAlign: 'center', color: '#64748b', fontSize: '11px', marginTop: '16px' } }, 'Authorized personnel only')
+            )
+          )
+        );
+      }
+
+      /* ─── Render: Dashboard ─────────────── */
+      const tabs = [
+        { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+        { id: 'compose', icon: '✏️', label: 'Compose' },
+        { id: 'smtp', icon: '⚙️', label: 'SMTP & Proxy' },
+        { id: 'send', icon: '🚀', label: 'Send' },
+      ];
+
+      return React.createElement('div', { style: { ...S.page, display: 'flex' } },
+        /* ─── Sidebar ─── */
+        React.createElement('div', { style: S.sidebar },
+          React.createElement('div', { style: S.logo },
+            React.createElement('div', { style: { fontSize: '24px', marginBottom: '4px' } }, '📧'),
+            React.createElement('div', { style: { fontSize: '16px', fontWeight: 700, color: '#e2e8f0' } }, 'NodeMailer Pro'),
+            React.createElement('div', { style: { fontSize: '11px', color: '#64748b' } }, 'Bulk Email System')
+          ),
+          React.createElement('nav', { style: { flex: 1, paddingTop: '8px' } },
+            tabs.map(t => React.createElement('button', { key: t.id, style: S.navBtn(tab === t.id), onClick: () => setTab(t.id) },
+              React.createElement('span', null, t.icon), ' ', t.label
+            ))
+          ),
+          React.createElement('div', { style: { padding: '12px 20px', borderTop: '1px solid #1e293b' } },
+            React.createElement('div', { style: { fontSize: '12px', color: '#64748b', marginBottom: '8px' } }, '👤 Admin'),
+            React.createElement('button', { onClick: doLogout, style: { width: '100%', padding: '8px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '12px' } }, '🚪 Logout')
+          )
+        ),
+
+        /* ─── Main Content ─── */
+        React.createElement('div', { style: S.main },
+          /* ─── DASHBOARD TAB ─── */
+          tab === 'dashboard' && React.createElement('div', null,
+            React.createElement('h2', { style: { fontSize: '22px', fontWeight: 700, marginBottom: '20px' } }, '📊 Dashboard'),
+            React.createElement('div', { style: S.grid(3) },
+              React.createElement('div', { style: S.stat('#6366f1,#8b5cf6') }, React.createElement('div', { style: S.statVal }, smtps.length), React.createElement('div', { style: S.statLbl }, 'SMTP Servers')),
+              React.createElement('div', { style: S.stat('#8b5cf6,#a855f7') }, React.createElement('div', { style: S.statVal }, proxies.length), React.createElement('div', { style: S.statLbl }, 'Proxies')),
+              React.createElement('div', { style: S.stat('#a855f7,#c084fc') }, React.createElement('div', { style: S.statVal }, recipients.length), React.createElement('div', { style: S.statLbl }, 'Recipients'))
+            ),
+            React.createElement('div', { style: { ...S.grid(3), marginTop: '12px' } },
+              React.createElement('div', { style: S.stat('#059669,#10b981') }, React.createElement('div', { style: S.statVal }, progress.sent), React.createElement('div', { style: S.statLbl }, 'Emails Sent')),
+              React.createElement('div', { style: S.stat('#0891b2,#06b6d4') },
+                React.createElement('div', { style: S.statVal }, tracking.opens),
+                React.createElement('div', { style: S.statLbl }, `Opened ${progress.sent > 0 ? `(${Math.round(tracking.opens / progress.sent * 100)}%)` : ''}`)
+              ),
+              React.createElement('div', { style: S.stat('#e11d48,#f43f5e') },
+                React.createElement('div', { style: S.statVal }, tracking.clicks),
+                React.createElement('div', { style: S.statLbl }, `Clicked ${progress.sent > 0 ? `(${Math.round(tracking.clicks / progress.sent * 100)}%)` : ''}`)
+              )
+            ),
+
+            /* System Status */
+            React.createElement('div', { style: { ...S.card, marginTop: '16px' } },
+              React.createElement('div', { style: S.cardTitle }, '🔧 System Readiness'),
+              React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+                [
+                  { ok: smtps.length > 0, label: 'SMTP Servers loaded', detail: `${smtps.length} server(s)` },
+                  { ok: recipients.length > 0, label: 'Recipients loaded', detail: `${recipients.length} email(s)` },
+                  { ok: subject.trim().length > 0, label: 'Subject line set', detail: subject ? subject.substring(0, 40) : 'Not set' },
+                  { ok: htmlBody.trim().length > 0, label: 'Email body ready', detail: htmlBody ? `${htmlBody.length} chars` : 'Empty' },
+                  { ok: !useProxies || proxies.length > 0, label: 'Proxies configured', detail: useProxies ? `${proxies.length} proxy(es)` : 'Disabled' },
+                ].map((item, i) => React.createElement('div', { key: i, style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px' } },
+                  React.createElement('span', { style: { fontSize: '16px' } }, item.ok ? '✅' : '⬜'),
+                  React.createElement('span', { style: { flex: 1, fontSize: '13px', color: item.ok ? '#e2e8f0' : '#64748b' } }, item.label),
+                  React.createElement('span', { style: { fontSize: '11px', color: '#64748b' } }, item.detail)
+                ))
+              )
+            ),
+
+            /* Tracking Info */
+            React.createElement('div', { style: { ...S.card, marginTop: '16px' } },
+              React.createElement('div', { style: S.cardTitle }, '📬 Tracking System'),
+              React.createElement('div', { style: S.grid(2) },
+                React.createElement('div', { style: { padding: '12px', background: 'rgba(8,145,178,0.1)', borderRadius: '8px', border: '1px solid rgba(8,145,178,0.2)' } },
+                  React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: '#06b6d4', marginBottom: '4px' } }, '📖 Open Tracking'),
+                  React.createElement('div', { style: { fontSize: '12px', color: '#94a3b8' } }, '1×1 pixel beacon injected into each email. Tracked server-side via /track/open/:id endpoint.')
+                ),
+                React.createElement('div', { style: { padding: '12px', background: 'rgba(225,29,72,0.1)', borderRadius: '8px', border: '1px solid rgba(225,29,72,0.2)' } },
+                  React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: '#f43f5e', marginBottom: '4px' } }, '🔗 Click Tracking'),
+                  React.createElement('div', { style: { fontSize: '12px', color: '#94a3b8' } }, 'Links wrapped with redirect URLs. Each click logged server-side via /track/click/:id endpoint.')
+                )
+              )
+            )
+          ),
+
+          /* ─── COMPOSE TAB ─── */
+          tab === 'compose' && React.createElement('div', null,
+            React.createElement('h2', { style: { fontSize: '22px', fontWeight: 700, marginBottom: '20px' } }, '✏️ Compose Email'),
+
+            /* From / Mask Info */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '👤 Sender Configuration'),
+              React.createElement('div', { style: { background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px', padding: '12px', marginBottom: '16px', fontSize: '13px', color: '#a5b4fc' } },
+                '💡 ', React.createElement('strong', null, 'Auto Send-From:'), ' If "From Email (Mask)" is left blank, each SMTP\'s username will automatically be used as the sender email. The sender rotates with SMTP rotation.'
+              ),
+              React.createElement('div', { style: S.grid(3) },
+                React.createElement('div', null,
+                  React.createElement('label', { style: S.label }, 'From Name'),
+                  React.createElement('input', { style: S.input, value: fromName, onChange: e => setFromName(e.target.value), placeholder: 'e.g. John Doe' })
+                ),
+                React.createElement('div', null,
+                  React.createElement('label', { style: S.label }, 'From Email (Mask - Optional)'),
+                  React.createElement('input', { style: S.input, value: fromEmail, onChange: e => setFromEmail(e.target.value), placeholder: 'Leave blank for auto SMTP rotation' })
+                ),
+                React.createElement('div', null,
+                  React.createElement('label', { style: S.label }, 'Reply-To (Optional)'),
+                  React.createElement('input', { style: S.input, value: replyTo, onChange: e => setReplyTo(e.target.value), placeholder: 'reply@example.com' })
+                )
+              ),
+              smtps.length > 0 && !fromEmail && React.createElement('div', { style: { marginTop: '4px' } },
+                React.createElement('span', { style: { fontSize: '11px', color: '#64748b' } }, 'Sender rotation queue: '),
+                smtps.map((s, i) => React.createElement('span', { key: i, style: S.tag('rgba(99,102,241,0.3)') }, s.user))
+              )
+            ),
+
+            /* Recipients */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '📋 Recipients (Mail To)'),
+              React.createElement('textarea', { style: S.textarea, value: recipientText, onChange: e => { setRecipientText(e.target.value); parseRecipients(e.target.value); }, placeholder: 'Paste recipient emails (one per line):\njohn@example.com\njane@example.com' }),
+              React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' } },
+                React.createElement('div', null,
+                  React.createElement('input', { type: 'file', accept: '.txt,.csv', onChange: handleFileUpload, style: { fontSize: '12px', color: '#94a3b8' } })
+                ),
+                React.createElement('span', { style: S.badge(recipients.length > 0 ? '#059669' : '#64748b') }, `${recipients.length} recipients loaded`)
+              )
+            ),
+
+            /* Subject */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '📝 Subject Line'),
+              React.createElement('input', { style: S.input, value: subject, onChange: e => setSubject(e.target.value), placeholder: 'e.g. {Hello|Hi|Hey} — Check out our {offer|deal|promo}!' }),
+              subject && React.createElement('div', { style: { marginTop: '4px' } },
+                React.createElement('span', { style: { fontSize: '11px', color: '#64748b' } }, 'Preview: '),
+                React.createElement('span', { style: { fontSize: '13px', color: '#a5b4fc', fontStyle: 'italic' } }, spintax(subject))
+              )
+            ),
+
+            /* HTML Body */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: { ...S.cardTitle, justifyContent: 'space-between' } },
+                React.createElement('span', null, '📄 HTML Body'),
+                React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+                  React.createElement('button', { onClick: () => setShowPreview(true), style: { padding: '6px 14px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: '6px', color: '#06b6d4', cursor: 'pointer', fontSize: '12px' } }, '👁️ Preview')
+                )
+              ),
+              React.createElement('textarea', { style: { ...S.textarea, minHeight: '200px' }, value: htmlBody, onChange: e => setHtmlBody(e.target.value), placeholder: '<h1>Hello!</h1><p>Your HTML content here...</p>' })
+            ),
+
+            /* Template Manager */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: { ...S.cardTitle, justifyContent: 'space-between' } },
+                React.createElement('span', null, '💾 Email Templates'),
+                React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+                  React.createElement('button', { onClick: () => setShowSaveModal(true), style: { padding: '6px 14px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '6px', color: '#818cf8', cursor: 'pointer', fontSize: '12px' } }, '💾 Save Current'),
+                  React.createElement('button', { onClick: () => setShowLoadModal(true), style: { padding: '6px 14px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '6px', color: '#10b981', cursor: 'pointer', fontSize: '12px' } }, '📂 Load Template')
+                )
+              ),
+              templates.length === 0 ? 
+                React.createElement('div', { style: { textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '13px' } }, 'No saved templates yet. Compose an email and click "Save Current".') :
+                React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } },
+                  templates.map(t => React.createElement('div', { key: t.id, style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px' } },
+                    React.createElement('span', { style: { fontSize: '12px', color: '#a5b4fc' } }, `📄 ${t.name}`),
+                    React.createElement('button', { onClick: () => loadTemplate(t), style: { background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '12px', padding: '2px' } }, '✅'),
+                    React.createElement('button', { onClick: () => deleteTemplate(t.id), style: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px', padding: '2px' } }, '🗑️')
+                  ))
+                )
+            ),
+
+            /* Session Settings */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '⚙️ Session Settings'),
+              React.createElement('div', { style: S.grid(3) },
+                React.createElement('div', null,
+                  React.createElement('label', { style: S.label }, 'Min Delay (ms)'),
+                  React.createElement('input', { style: S.input, type: 'number', value: minDelay, onChange: e => setMinDelay(Number(e.target.value)) })
+                ),
+                React.createElement('div', null,
+                  React.createElement('label', { style: S.label }, 'Max Delay (ms)'),
+                  React.createElement('input', { style: S.input, type: 'number', value: maxDelay, onChange: e => setMaxDelay(Number(e.target.value)) })
+                ),
+                React.createElement('div', null,
+                  React.createElement('label', { style: S.label }, 'Emails Per SMTP Rotation'),
+                  React.createElement('input', { style: S.input, type: 'number', value: emailsPerRotation, onChange: e => setEmailsPerRotation(Number(e.target.value)) })
+                )
+              ),
+              React.createElement('div', { style: { marginTop: '4px' } },
+                React.createElement('label', { style: S.label }, 'Total Mails to Send (0 = Send All)'),
+                React.createElement('input', { style: { ...S.input, maxWidth: '300px' }, type: 'number', value: totalMails, onChange: e => setTotalMails(Number(e.target.value)), placeholder: '0 = send to all recipients' }),
+                React.createElement('div', { style: { fontSize: '11px', color: '#64748b', marginTop: '-10px' } }, 'Set to 0 to send to all loaded recipients. Set a number to limit this session.')
+              )
+            )
+          ),
+
+          /* ─── SMTP & PROXY TAB ─── */
+          tab === 'smtp' && React.createElement('div', null,
+            React.createElement('h2', { style: { fontSize: '22px', fontWeight: 700, marginBottom: '20px' } }, '⚙️ SMTP & Proxy Configuration'),
+
+            /* SMTP */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '📡 SMTP Servers'),
+              React.createElement('textarea', { style: S.textarea, value: smtpText, onChange: e => { setSmtpText(e.target.value); parseSmtps(e.target.value); }, placeholder: 'Paste SMTP credentials (one per line):\nhost|port|user|pass\nsmtp.gmail.com|587|user@gmail.com|app-password\nsmtp.office365.com|587|user@outlook.com|password' }),
+              React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' } },
+                React.createElement('span', { style: { fontSize: '12px', color: '#64748b' } }, 'Format: host|port|user|pass'),
+                React.createElement('span', { style: S.badge(smtps.length > 0 ? '#6366f1' : '#64748b') }, `${smtps.length} SMTP(s) parsed`)
+              ),
+              smtps.length > 0 && React.createElement('div', { style: { marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' } },
+                smtps.map((s, i) => React.createElement('div', { key: i, style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px', border: '1px solid #1e293b' } },
+                  React.createElement('span', { style: { fontSize: '14px' } }, '🟢'),
+                  React.createElement('span', { style: { flex: 1, fontSize: '13px', color: '#e2e8f0' } }, `${s.host}:${s.port}`),
+                  React.createElement('span', { style: { fontSize: '12px', color: '#a5b4fc' } }, s.user)
+                ))
+              )
+            ),
+
+            /* PORT SELECTION - PROMINENT */
+            React.createElement('div', { style: { ...S.card, background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.3)' } },
+              React.createElement('div', { style: S.cardTitle }, '🔌 SMTP Port Selection'),
+              React.createElement('p', { style: { fontSize: '13px', color: '#94a3b8', marginBottom: '16px' } }, 'Select the default port for SMTP connections. If the selected port fails, the system will automatically try alternative ports.'),
+              React.createElement('div', { style: { display: 'flex', gap: '12px' } },
+                [
+                  { port: '25', label: 'Port 25', sub: 'Standard', warn: '⚠️ Often blocked' },
+                  { port: '465', label: 'Port 465', sub: 'SSL/TLS', warn: '🔒 Encrypted' },
+                  { port: '587', label: 'Port 587', sub: 'STARTTLS', warn: '✅ Recommended' },
+                  { port: '2525', label: 'Port 2525', sub: 'Alternative', warn: '🔄 Fallback' },
+                ].map(p => React.createElement('button', { key: p.port, onClick: () => setSmtpPort(p.port), style: S.portBtn(smtpPort === p.port) },
+                  React.createElement('div', { style: { fontSize: '18px', fontWeight: 700 } }, p.port),
+                  React.createElement('div', { style: { fontSize: '11px', opacity: 0.8, marginTop: '2px' } }, p.sub),
+                  React.createElement('div', { style: { fontSize: '10px', marginTop: '4px', opacity: 0.7 } }, p.warn)
+                ))
+              ),
+              React.createElement('div', { style: { marginTop: '12px', padding: '10px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px', fontSize: '12px', color: '#a5b4fc' } },
+                'ℹ️ ', React.createElement('strong', null, 'Port Fallback Order:'), ` ${smtpPort} → ${['587', '465', '2525', '25'].filter(p => p !== smtpPort).join(' → ')}`
+              )
+            ),
+
+            /* Proxies */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: { ...S.cardTitle, justifyContent: 'space-between' } },
+                React.createElement('span', null, '🛡️ Proxy Configuration'),
+                React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' } },
+                  React.createElement('input', { type: 'checkbox', checked: useProxies, onChange: e => setUseProxies(e.target.checked), style: { width: '16px', height: '16px', accentColor: '#6366f1' } }),
+                  React.createElement('span', { style: { fontSize: '13px', color: useProxies ? '#10b981' : '#64748b' } }, useProxies ? 'Proxies Enabled' : 'Proxies Disabled')
+                )
+              ),
+              React.createElement('textarea', { style: S.textarea, value: proxyText, onChange: e => { setProxyText(e.target.value); setProxies(e.target.value.split('\n').map(l => l.trim()).filter(Boolean)); }, placeholder: 'Paste proxies (one per line):\nhost:port\nhost:port:username:password\n192.168.1.1:1080\n10.0.0.1:1080:user:pass', disabled: !useProxies }),
+              React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' } },
+                React.createElement('span', { style: { fontSize: '12px', color: '#64748b' } }, 'Format: host:port or host:port:user:pass (SOCKS5)'),
+                React.createElement('span', { style: S.badge(proxies.length > 0 && useProxies ? '#8b5cf6' : '#64748b') }, useProxies ? `${proxies.length} proxies` : 'Disabled')
+              )
+            )
+          ),
+
+          /* ─── SEND TAB ─── */
+          tab === 'send' && React.createElement('div', null,
+            React.createElement('h2', { style: { fontSize: '22px', fontWeight: 700, marginBottom: '20px' } }, '🚀 Send Campaign'),
+
+            /* Controls */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '🎛️ Campaign Controls'),
+              React.createElement('div', { style: { display: 'flex', gap: '12px', flexWrap: 'wrap' } },
+                !sending && React.createElement('button', { onClick: startSending, style: { ...S.btnPrimary, width: 'auto', padding: '14px 32px', fontSize: '15px' } }, '🚀 Start Sending'),
+                sending && !paused && React.createElement('button', { onClick: pauseSending, style: { padding: '14px 28px', background: 'linear-gradient(135deg,#f59e0b,#d97706)', border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '14px' } }, '⏸️ Pause'),
+                sending && paused && React.createElement('button', { onClick: resumeSending, style: { padding: '14px 28px', background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '14px' } }, '▶️ Resume'),
+                sending && React.createElement('button', { onClick: stopSending, style: { padding: '14px 28px', background: 'linear-gradient(135deg,#ef4444,#dc2626)', border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '14px' } }, '⏹️ Stop')
+              )
+            ),
+
+            /* Status Display */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '📡 Current Status'),
+              React.createElement('div', { style: S.grid(2) },
+                React.createElement('div', { style: { padding: '12px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '11px', color: '#64748b', marginBottom: '4px' } }, 'FROM (SMTP)'),
+                  React.createElement('div', { style: { fontSize: '14px', color: '#a5b4fc', fontWeight: 600 } }, progress.currentSmtp || (smtps.length > 0 ? smtps[0].user : 'No SMTP loaded'))
+                ),
+                React.createElement('div', { style: { padding: '12px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '11px', color: '#64748b', marginBottom: '4px' } }, 'TO (RECIPIENT)'),
+                  React.createElement('div', { style: { fontSize: '14px', color: '#10b981', fontWeight: 600 } }, progress.currentRecipient || (recipients.length > 0 ? recipients[0] : 'No recipients loaded'))
+                ),
+                React.createElement('div', { style: { padding: '12px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '11px', color: '#64748b', marginBottom: '4px' } }, 'PROXY'),
+                  React.createElement('div', { style: { fontSize: '14px', color: '#c084fc', fontWeight: 600 } }, progress.currentProxy || (useProxies && proxies.length > 0 ? proxies[0] : 'Direct (No Proxy)'))
+                ),
+                React.createElement('div', { style: { padding: '12px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '11px', color: '#64748b', marginBottom: '4px' } }, 'PORT'),
+                  React.createElement('div', { style: { fontSize: '14px', color: '#fbbf24', fontWeight: 600 } }, `Port ${progress.currentPort || smtpPort}`)
+                )
+              )
+            ),
+
+            /* Progress */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: S.cardTitle }, '📈 Progress'),
+              React.createElement('div', { style: S.progressBar },
+                React.createElement('div', { style: S.progressFill(progress.pct) })
+              ),
+              React.createElement('div', { style: { textAlign: 'center', marginTop: '8px', fontSize: '20px', fontWeight: 700, color: '#818cf8' } }, `${progress.pct}%`),
+              React.createElement('div', { style: { ...S.grid(4), marginTop: '12px' } },
+                React.createElement('div', { style: { textAlign: 'center', padding: '10px', background: 'rgba(16,185,129,0.1)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: '#10b981' } }, progress.sent),
+                  React.createElement('div', { style: { fontSize: '10px', color: '#64748b' } }, 'SENT')
+                ),
+                React.createElement('div', { style: { textAlign: 'center', padding: '10px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: '#ef4444' } }, progress.failed),
+                  React.createElement('div', { style: { fontSize: '10px', color: '#64748b' } }, 'FAILED')
+                ),
+                React.createElement('div', { style: { textAlign: 'center', padding: '10px', background: 'rgba(6,182,212,0.1)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: '#06b6d4' } }, tracking.opens),
+                  React.createElement('div', { style: { fontSize: '10px', color: '#64748b' } }, 'OPENED')
+                ),
+                React.createElement('div', { style: { textAlign: 'center', padding: '10px', background: 'rgba(244,63,94,0.1)', borderRadius: '8px' } },
+                  React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: '#f43f5e' } }, tracking.clicks),
+                  React.createElement('div', { style: { fontSize: '10px', color: '#64748b' } }, 'CLICKED')
+                )
+              )
+            ),
+
+            /* Activity Log */
+            React.createElement('div', { style: S.card },
+              React.createElement('div', { style: { ...S.cardTitle, justifyContent: 'space-between' } },
+                React.createElement('span', null, '📋 Activity Log'),
+                React.createElement('button', { onClick: () => setLogs([]), style: { padding: '4px 12px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '11px' } }, 'Clear')
+              ),
+              React.createElement('div', { ref: logBoxRef, style: S.logBox },
+                logs.length === 0 ?
+                  React.createElement('div', { style: { color: '#475569', textAlign: 'center', padding: '30px' } }, 'Waiting for campaign to start...') :
+                  logs.map((log, i) => React.createElement('div', { key: i, style: { padding: '4px 0', borderBottom: '1px solid rgba(30,41,59,0.5)', color: log.type === 'success' ? '#10b981' : log.type === 'error' ? '#ef4444' : log.type === 'warn' ? '#f59e0b' : '#94a3b8' } },
+                    React.createElement('span', { style: { color: '#475569', marginRight: '8px' } }, `[${log.ts}]`),
+                    log.msg
+                  ))
+              )
+            )
+          )
+        ),
+
+        /* ─── PREVIEW MODAL ─── */
+        showPreview && React.createElement('div', { style: S.modal, onClick: () => setShowPreview(false) },
+          React.createElement('div', { style: { ...S.modalBox, maxWidth: '700px' }, onClick: e => e.stopPropagation() },
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '16px' } },
+              React.createElement('h3', { style: { fontSize: '18px', fontWeight: 600 } }, '👁️ Email Preview'),
+              React.createElement('button', { onClick: () => setShowPreview(false), style: { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '20px' } }, '✕')
+            ),
+            React.createElement('div', { style: { background: '#0f172a', padding: '12px', borderRadius: '8px', marginBottom: '12px', fontSize: '13px' } },
+              React.createElement('div', null, React.createElement('strong', { style: { color: '#64748b' } }, 'From:'), ' ', React.createElement('span', { style: { color: '#a5b4fc' } }, `${fromName || 'Sender'} <${fromEmail || (smtps[0]?.user || 'smtp@example.com')}>`)),
+              React.createElement('div', null, React.createElement('strong', { style: { color: '#64748b' } }, 'Subject:'), ' ', React.createElement('span', { style: { color: '#e2e8f0' } }, spintax(subject) || '(No subject)'))
+            ),
+            React.createElement('div', { style: { background: '#fff', borderRadius: '8px', padding: '20px', color: '#000', minHeight: '200px' }, dangerouslySetInnerHTML: { __html: spintax(htmlBody) || '<p style="color:#999">No content to preview</p>' } })
+          )
+        ),
+
+        /* ─── SAVE TEMPLATE MODAL ─── */
+        showSaveModal && React.createElement('div', { style: S.modal, onClick: () => setShowSaveModal(false) },
+          React.createElement('div', { style: S.modalBox, onClick: e => e.stopPropagation() },
+            React.createElement('h3', { style: { fontSize: '18px', fontWeight: 600, marginBottom: '16px' } }, '💾 Save Template'),
+            React.createElement('label', { style: S.label }, 'Template Name'),
+            React.createElement('input', { style: S.input, value: templateName, onChange: e => setTemplateName(e.target.value), placeholder: 'e.g. Welcome Email, Promo Blast', onKeyDown: e => e.key === 'Enter' && saveTemplate(), autoFocus: true }),
+            React.createElement('div', { style: { fontSize: '12px', color: '#64748b', marginBottom: '16px' } },
+              'This will save the current Subject and HTML Body for later use. Templates are stored permanently on the server.'
+            ),
+            React.createElement('div', { style: { display: 'flex', gap: '12px', justifyContent: 'flex-end' } },
+              React.createElement('button', { onClick: () => setShowSaveModal(false), style: { padding: '10px 20px', background: '#334155', border: 'none', borderRadius: '8px', color: '#94a3b8', cursor: 'pointer' } }, 'Cancel'),
+              React.createElement('button', { onClick: saveTemplate, style: { padding: '10px 20px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 600 } }, '💾 Save Template')
+            )
+          )
+        ),
+
+        /* ─── LOAD TEMPLATE MODAL ─── */
+        showLoadModal && React.createElement('div', { style: S.modal, onClick: () => setShowLoadModal(false) },
+          React.createElement('div', { style: S.modalBox, onClick: e => e.stopPropagation() },
+            React.createElement('h3', { style: { fontSize: '18px', fontWeight: 600, marginBottom: '16px' } }, '📂 Load Template'),
+            templates.length === 0 ?
+              React.createElement('div', { style: { textAlign: 'center', padding: '30px', color: '#64748b' } }, 'No saved templates. Save one first in the Compose tab.') :
+              React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+                templates.map(t => React.createElement('div', { key: t.id, style: { display: 'flex', alignItems: 'center', padding: '14px', background: 'rgba(15,23,42,0.5)', borderRadius: '8px', border: '1px solid #334155' } },
+                  React.createElement('div', { style: { flex: 1 } },
+                    React.createElement('div', { style: { fontWeight: 600, fontSize: '14px' } }, `📄 ${t.name}`),
+                    React.createElement('div', { style: { fontSize: '12px', color: '#64748b', marginTop: '2px' } }, `Subject: ${t.subject || '(none)'}`),
+                    t.savedAt && React.createElement('div', { style: { fontSize: '11px', color: '#475569', marginTop: '2px' } }, new Date(t.savedAt).toLocaleString())
+                  ),
+                  React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+                    React.createElement('button', { onClick: () => loadTemplate(t), style: { padding: '8px 16px', background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px', fontWeight: 600 } }, 'Load'),
+                    React.createElement('button', { onClick: () => deleteTemplate(t.id), style: { padding: '8px 16px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '12px' } }, '🗑️')
+                  )
+                ))
+              ),
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: '16px' } },
+              React.createElement('button', { onClick: () => setShowLoadModal(false), style: { padding: '10px 20px', background: '#334155', border: 'none', borderRadius: '8px', color: '#94a3b8', cursor: 'pointer' } }, 'Close')
+            )
+          )
+        )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>
