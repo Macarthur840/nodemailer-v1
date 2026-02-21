@@ -9,7 +9,7 @@ node app.js
 ```
 
 Visit: **http://your-server-ip:3000**
-Login: **Admin** / **Admin@2025**
+Login: **username** / **pass**
 
 ## cPanel Deployment
 
@@ -22,7 +22,7 @@ Login: **Admin** / **Admin@2025**
 
 ## Features
 
-- Admin login (Admin / Admin@2025)
+- Admin login (username / pass)
 - SMTP circular rotation
 - Proxy support (SOCKS5)
 - Port selection (25/465/587/2525) with auto-fallback
