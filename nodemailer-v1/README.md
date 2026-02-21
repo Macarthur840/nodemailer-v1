@@ -1,4 +1,4 @@
-# NodeMailer Pro — Bulk Email System
+# Node — Email System
 
 ## Quick Start (VPS)
 
